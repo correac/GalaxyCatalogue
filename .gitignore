@@ -1,0 +1,25 @@
+# Python packaging
+env/*
+*.egg-info
+build/*
+dist/*
+
+# Python compiled files
+*__pycache__*
+*.idea/
+
+# Plot outputs, just in case
+*.pdf
+*.png
+*.mp4
+*.hdf5
+index.html
+plots/
+
+# MacOS
+*.DS_Store
+
+
+output-*
+error-*
+*.job

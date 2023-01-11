@@ -21,7 +21,7 @@ Clone GalaxyCatalogue
 ```
 git clone https://github.com/correac/GalaxyCatalogue.git
 
-cd SIDMPlots
+cd GalaxyCatalogue
 
 python3 -m venv galaxycatalogue_env
 ```

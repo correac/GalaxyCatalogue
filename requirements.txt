@@ -1,0 +1,13 @@
+astropy
+h5py
+matplotlib
+numpy
+scipy
+unyt
+jinja2
+numba
+pyyaml
+tqdm
+swiftsimio==4.9.0
+swiftascmaps==1.2.2
+velociraptor

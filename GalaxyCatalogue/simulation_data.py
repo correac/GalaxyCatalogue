@@ -92,7 +92,7 @@ class SimInfo:
         self.snapshot = load(f"{self.directory}/{self.snapshot_name}")
 
         # Box size of the simulation in kpc
-        self.boxSize = self.snapshot.metadata.boxsize.to("kpc").value[0]
+        self.boxSize = self.snapshot.metadata.boxsize.to("Mpc")
 
         # Cosmic scale factor
         self.a = self.snapshot.metadata.scale_factor

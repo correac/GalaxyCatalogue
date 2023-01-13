@@ -177,10 +177,16 @@ def get_projection_map(sim_info, npix, size, origin, halo_index):
 
         rgb_image_face[:, :, ilum] = mass_map_face.T
 
-    # # Some plotting options..
-    if size[0] > 0.5:
-        Q=30
-        stretch=50
+    # # Some plotting options based on aperture
+    if size[0] > 1:
+        Q = 30
+        stretch = 50
+    elif (size[0] <= 1) & (size[0] > 0.5):
+        Q=50
+        stretch=30
+    elif (size[0] <= 0.5) & (size[0]>0.1):
+        Q = 20
+        stretch = 0.01
     else:
         Q=10
         stretch=0.5
@@ -242,7 +248,9 @@ def make_image(sim_info, npix, size, origin, halo_index):
     ax.set_yticks([])
     ax.set_axis_off()
     ax.imshow(stars_map, extent=region, interpolation='nearest')
-    fig.savefig(sim_info.output_path+"/stars_light_map_halo_%i.png"%halo_index, dpi=500)
+    filename = sim_info.output_path+"/stars_light_map_galaxy_%i"%halo_index
+    filename += "_size_%.2fMpc"%size
+    fig.savefig(filename+".png", dpi=500)
     plt.close()
 
     fig = plt.figure(figsize=(6.0, 6.0))
@@ -253,7 +261,9 @@ def make_image(sim_info, npix, size, origin, halo_index):
     ax.set_yticks([])
     ax.set_axis_off()
     ax.imshow(LogNorm()(dm_map), extent=region, interpolation='nearest', cmap=evermore_r)
-    fig.savefig(sim_info.output_path+"/dm_mass_map_halo_%i.png"%halo_index, dpi=500)
+    filename = sim_info.output_path+"/dm_mass_map_galaxy_%i"%halo_index
+    filename += "_size_%.2fMpc"%size
+    fig.savefig(filename+".png", dpi=500)
     plt.close()
 
 
@@ -295,7 +305,7 @@ if __name__ == "__main__":
     # Some options:
     npix = 1024         # number of pixels
     size = 3            # [Mpc] size of image
-    num_galaxies = 30   # number of galaxies to plot
+    num_galaxies = 10   # number of galaxies to plot
 
     # This script will plot the most massive galaxies
     # in the box. If num_galaxies = 10, it will correspond

@@ -19,6 +19,32 @@ from astropy.visualization import make_lupton_rgb
 from argumentparser import ArgumentParser
 from simulation_data import SimInfo
 
+
+def calculate_angular_momentum(part_pos, part_vel, part_mass, origin):
+
+    pos = part_pos - origin
+    # Compute distances
+    distancesDATA = np.sqrt(np.sum(pos ** 2, axis=1))
+
+    # Restrict particles to 30kpc region
+    extract = distancesDATA < 30.0
+    pos = pos[extract,:]
+    vel = part_vel[extract,:]
+    mass = part_mass[extract]
+
+    distancesDATA = distancesDATA[extract]
+
+    Mstar = np.sum(mass)
+    dvVmass = np.sum(mass[:, np.newaxis] * vel, axis=0) / Mstar
+    vel -= dvVmass # correct for bulk velocity
+
+    # Compute momentum within 5 kpc region
+    extract = distancesDATA < 5.0
+    smomentum_inner_5kpc = np.cross(pos[extract,:], vel[extract, :])
+    momentum_inner_5kpc = np.sum(mass[extract][:, np.newaxis] * smomentum_inner_5kpc, axis=0)
+
+    return momentum_inner_5kpc
+
 def make_rotation_matrix(ang_momentum):
 
     face_on_rotation_matrix = rotation_matrix_from_vector(ang_momentum)
@@ -38,6 +64,7 @@ def translate_region(origin, size, boxSize, region):
 def translate_coordinates(coordinates, origin, size, boxSize, region_defined):
 
     new_region = region_defined.copy()
+    new_origin = origin.copy()
 
     for i in range(3):
 
@@ -45,54 +72,35 @@ def translate_coordinates(coordinates, origin, size, boxSize, region_defined):
             select_region = np.where(coordinates[:,i] <= origin[i] + size[0] * 0.5 - boxSize[i])[0]
             coordinates[select_region,i] += boxSize[i]
             coordinates[:, i] -= (origin[i] + size[0] * 0.5 - boxSize[i])
+            new_origin[i] -= (origin[i] + size[0] * 0.5 - boxSize[i])
 
             if i == 0:
                 new_region[0:2] -= (origin[i] + size[0] * 0.5 - boxSize[i])
             if i == 1:
-               new_region[2:4] -= (origin[i] + size[0] * 0.5 - boxSize[i])
+                new_region[2:4] -= (origin[i] + size[0] * 0.5 - boxSize[i])
 
         if (origin[i] - size[0] * 0.5 < 0):
             select_region = np.where(coordinates[:,i] >= origin[i] - size[0] * 0.5 + boxSize[i])[0]
             coordinates[select_region,i] -= boxSize[i]
             coordinates[:, i] -= (origin[i] - size[0] * 0.5)
+            new_origin[i] -= (origin[i] - size[0] * 0.5)
 
             if i == 0:
                 new_region[0:2] -= (origin[i] - size[0] * 0.5)
             if i == 1:
-               new_region[2:4] -= (origin[i] - size[0] * 0.5)
+                new_region[2:4] -= (origin[i] - size[0] * 0.5)
+
+    return coordinates, new_region, new_origin
 
 
+def get_projection_map(sim_info, npix, size, origin, halo_index, rotation):
 
-    return coordinates, new_region
-
-
-def get_projection_map(sim_info, npix, size, origin, halo_index):
+    rotation_vector = np.array([1, 0, 0])  # ad-hoc
 
     size = unyt.unyt_array([size, size, size], 'Mpc')
     region = [[-0.5 * b + o, 0.5 * b + o] for b, o in zip(size, origin)]
     region_defined = unyt.unyt_array([region[0][0], region[0][1], region[1][0], region[1][1]], 'Mpc')
-
-    # print('======')
-    # print('Halo index:',halo_index)
-    # print('origin:',origin)
-    # print('size:',size)
-    # print('Region x:',region[0])
-    # print('Region y:',region[1])
-    # print('Region z:',region[2])
-    # # This is one option for translation..
-    # if (origin[0] + size[0] * 0.5 > sim_info.boxSize[0]): print('Translating..x')
-    # if (origin[1] + size[0] * 0.5 > sim_info.boxSize[1]): print('Translating..y')
-    # if (origin[2] + size[0] * 0.5 > sim_info.boxSize[2]): print('Translating..z')
-    # # This is the other..
-    # if (origin[0] - size[0] * 0.5 < 0): print('Translating..x')
-    # if (origin[1] - size[0] * 0.5 < 0): print('Translating..y')
-    # if (origin[2] - size[0] * 0.5 < 0): print('Translating..z')
-
     region = translate_region(origin, size, sim_info.boxSize, region)
-
-    # print('New region x:', region[0])
-    # print('New region y:', region[1])
-    # print('New region z:', region[2])
 
     data_mask = mask(f"{sim_info.directory}/{sim_info.snapshot_name}")
     data_mask.constrain_spatial(region)
@@ -100,23 +108,8 @@ def get_projection_map(sim_info, npix, size, origin, halo_index):
 
     data.stars.coordinates = data.stars.coordinates.to_physical()
 
-    data.stars.coordinates, region_defined = \
+    data.stars.coordinates, region_defined, new_origin = \
         translate_coordinates(data.stars.coordinates, origin, size, sim_info.boxSize, region_defined)
-
-    # Let's do some checking..
-    # if (origin[0] + size[0] * 0.5 > sim_info.boxSize[0]):
-    #     print('x coordinates:',np.min(data.stars.coordinates[:,0]), np.max(data.stars.coordinates[:,0]))
-    # if (origin[1] + size[0] * 0.5 > sim_info.boxSize[1]):
-    #     print('y coordinates:',np.min(data.stars.coordinates[:,1]), np.max(data.stars.coordinates[:,1]))
-    # if (origin[2] + size[0] * 0.5 > sim_info.boxSize[2]):
-    #     print('z coordinates:',np.min(data.stars.coordinates[:,2]), np.max(data.stars.coordinates[:,2]))
-    # if (origin[0] - size[0] * 0.5 < 0):
-    #     print('x coordinates:',np.min(data.stars.coordinates[:, 0]), np.max(data.stars.coordinates[:, 0]))
-    # if (origin[1] - size[0] * 0.5 < 0):
-    #     print('y coordinates:',np.min(data.stars.coordinates[:, 1]), np.max(data.stars.coordinates[:, 1]))
-    # if (origin[2] - size[0] * 0.5 < 0):
-    #     print('z coordinates:',np.min(data.stars.coordinates[:,2]), np.max(data.stars.coordinates[:,2]))
-    # print('new region',region_defined)
 
     data.stars.smoothing_lengths = generate_smoothing_lengths(
         coordinates=data.stars.coordinates,
@@ -124,17 +117,36 @@ def get_projection_map(sim_info, npix, size, origin, halo_index):
         kernel_gamma=2.5,
         neighbours=20,
         speedup_fac=2,
-        # kernel_gamma=kernel_gamma,
-        # neighbours=11,
         dimension=3,
     )
 
     # Set here your vector if you want some rotation
-    # rotation_vector = np.array([1, 0, 0]) #ad-hoc
-    # face_on_rotation_matrix, edge_on_rotation_matrix = make_rotation_matrix(
-    #     rotation_vector
-    # )
+    # if rotation flag = 1 or -1, we make rotation based on stellar angular momentum
+    if np.abs(rotation) == 1:
+        rotation_vector = calculate_angular_momentum(data.stars.coordinates, data.stars.velocities,
+                                                     data.stars.masses, new_origin)
 
+    # if rotation flag = 2 we make random rotation
+    if rotation == 2:
+        u = np.random.uniform(0,1,1)[0]
+        theta = np.arccos(1. - 2 * u)
+        phi = 2 * np.pi * np.random.uniform(0,1,1)[0]
+        rotation_vector = np.array([np.sin(theta) * np.cos(phi), np.sin(theta) * np.sin(phi),np.cos(theta)])
+
+    # if rotation flag > 2 we rotate by given angle
+    if rotation > 2:
+        theta = rotation
+        phi = 2 * np.pi * np.random.uniform(0,1,1)[0]
+        rotation_vector = np.array([np.sin(theta) * np.cos(phi), np.sin(theta) * np.sin(phi), np.cos(theta)])
+
+    face_on_rotation_matrix, edge_on_rotation_matrix = make_rotation_matrix(rotation_vector)
+
+    if rotation == -1:
+        rotation_matrix = edge_on_rotation_matrix
+    else:
+        rotation_matrix = face_on_rotation_matrix
+
+    # Calculate particles luminosity in i, r and g bands
     luminosities = [
         data.stars.luminosities.GAMA_i,
         data.stars.luminosities.GAMA_r,
@@ -144,19 +156,31 @@ def get_projection_map(sim_info, npix, size, origin, halo_index):
 
     for ilum in range(len(luminosities)):
 
-        # Face on projection
         data.stars.usermass = luminosities[ilum]
-        pixel_grid = project_pixel_grid(
-            data=data.stars,
-            resolution=npix,
-            project="usermass",
-            parallel=True,
-            region=region_defined,
-            # rotation_center=new_origin,
-            # rotation_matrix=face_on_rotation_matrix,
-            boxsize=data.metadata.boxsize,
-            backend="subsampled",
-        )
+
+        # Face on projection
+        if rotation == 0:
+            pixel_grid = project_pixel_grid(
+                data=data.stars,
+                resolution=npix,
+                project="usermass",
+                parallel=True,
+                region=region_defined,
+                boxsize=data.metadata.boxsize,
+                backend="subsampled",
+            )
+        else:
+            pixel_grid = project_pixel_grid(
+                data=data.stars,
+                resolution=npix,
+                project="usermass",
+                parallel=True,
+                region=region_defined,
+                rotation_center=new_origin,
+                rotation_matrix=rotation_matrix,
+                boxsize=data.metadata.boxsize,
+                backend="subsampled",
+            )
 
         x_range = region[0][1] - region[0][0]
         y_range = region[1][1] - region[1][0]
@@ -201,7 +225,7 @@ def get_projection_map(sim_info, npix, size, origin, halo_index):
 
     data.dark_matter.coordinates = data.dark_matter.coordinates.to_physical()
 
-    data.dark_matter.coordinates, _ = \
+    data.dark_matter.coordinates, _, _ = \
         translate_coordinates(data.dark_matter.coordinates, origin, size, sim_info.boxSize, region_defined)
 
     data.dark_matter.smoothing_lengths = generate_smoothing_lengths(
@@ -214,17 +238,28 @@ def get_projection_map(sim_info, npix, size, origin, halo_index):
     )
 
     # Project the dark matter mass
-    dm_grid = project_pixel_grid(
-        data=data.dark_matter,
-        resolution=npix,
-        project="masses",
-        parallel=True,
-        region=region_defined,
-        # rotation_center=unyt.unyt_array([x, y, z]),
-        # rotation_matrix=face_on_rotation_matrix,
-        boxsize=data.metadata.boxsize,
-        backend="subsampled",
-    )
+    if rotation == 0:
+        dm_grid = project_pixel_grid(
+            data=data.dark_matter,
+            resolution=npix,
+            project="masses",
+            parallel=True,
+            region=region_defined,
+            boxsize=data.metadata.boxsize,
+            backend="subsampled",
+        )
+    else:
+        dm_grid = project_pixel_grid(
+            data=data.dark_matter,
+            resolution=npix,
+            project="masses",
+            parallel=True,
+            region=region_defined,
+            rotation_center=new_origin,
+            rotation_matrix=rotation_matrix,
+            boxsize=data.metadata.boxsize,
+            backend="subsampled",
+        )
 
     dm_map = unyt_array(dm_grid, units=units)
     dm_map.convert_to_units(1.0 / kpc ** 2)
@@ -233,10 +268,10 @@ def get_projection_map(sim_info, npix, size, origin, halo_index):
     return stars_map, dm_map, region_defined
 
 
-def make_image(sim_info, npix, size, origin, halo_index):
+def make_image(sim_info, npix, size, origin, halo_index, rotation):
 
     stars_map, dm_map, region = get_projection_map(
-        sim_info, npix, size, origin, halo_index
+        sim_info, npix, size, origin, halo_index, rotation
     )
 
     ######################
@@ -267,7 +302,7 @@ def make_image(sim_info, npix, size, origin, halo_index):
     plt.close()
 
 
-def plot_sample(sim_info, num_galaxies, npix, size):
+def plot_sample(sim_info, num_galaxies, npix, size, rotation):
 
     # We are imposing to plot central galaxies only
     sample = np.where(sim_info.halo_data.structure_type == 10)[0]
@@ -285,7 +320,7 @@ def plot_sample(sim_info, num_galaxies, npix, size):
 
         origin = unyt.unyt_array([x, y, z], 'Mpc') / sim_info.a  # to comoving
 
-        make_image(sim_info, npix, size, origin, index)
+        make_image(sim_info, npix, size, origin, index, rotation)
 
 
 if __name__ == "__main__":
@@ -304,12 +339,17 @@ if __name__ == "__main__":
 
     # Some options:
     npix = 1024         # number of pixels
-    size = 3            # [Mpc] size of image
-    num_galaxies = 10   # number of galaxies to plot
+    size = 0.03         # [Mpc] size of image
+    num_galaxies = 5    # number of galaxies to plot
+    rotation = 50       # Rotation flag. 0: no rotation,
+                        #                1: rotation to make stellar disc face-on,
+                        #               -1: rotation to make stellar disc edge-on,
+                        #                2: random rotation,
+                        #               >2: rotation in given angle
 
     # This script will plot the most massive galaxies
     # in the box. If num_galaxies = 10, it will correspond
     # to making visualization of the 10 most massive galaxies
     # and their respective haloes.
-    plot_sample(sim_info, num_galaxies, npix, size)
+    plot_sample(sim_info, num_galaxies, npix, size, rotation)
 

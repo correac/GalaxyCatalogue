@@ -13,7 +13,7 @@ from swiftsimio.visualisation.smoothing_length_generation import (
     generate_smoothing_lengths,
 )
 
-from swiftascmaps import evermore, evermore_r, red_tv, red_tv_r
+from swiftascmaps import evermore, evermore_r, red_tv, red_tv_r, reputation, midnights
 from astropy.visualization import make_lupton_rgb
 
 from argumentparser import ArgumentParser
@@ -288,6 +288,14 @@ def make_image(sim_info, npix, size, origin, halo_index, rotation):
     fig.savefig(filename+".png", dpi=500)
     plt.close()
 
+    # Nienke select here a colormap
+    colormap = evermore_r
+    # colormap = midnights
+    # colormap = 'binary_r'
+    # colormap = 'viridis'
+    # colormap = 'magma'
+
+
     fig = plt.figure(figsize=(6.0, 6.0))
     fig.subplots_adjust(left=0.0, right=1.0, top=1.0, bottom=0.0)
     ax = plt.subplot(1,1,1)
@@ -295,11 +303,60 @@ def make_image(sim_info, npix, size, origin, halo_index, rotation):
     ax.set_xticks([])
     ax.set_yticks([])
     ax.set_axis_off()
-    ax.imshow(LogNorm()(dm_map), extent=region, interpolation='nearest', cmap=evermore_r)
+    ax.imshow(LogNorm()(dm_map), extent=region, interpolation='nearest', cmap=colormap)
     filename = sim_info.output_path+"/dm_mass_map_galaxy_%i"%halo_index
     filename += "_size_%.2fMpc"%size
     fig.savefig(filename+".png", dpi=500)
     plt.close()
+
+def make_output_data(sim_info, sample, size, num_galaxies):
+
+    # Do we need any data for Ben's parametric model?
+    # Halo mass? Halo radius? Galaxy mass? Size? Morphology? Angular momentum?
+    M200c = sim_info.halo_data.log10_halo_mass[sample]
+    R200c = sim_info.halo_data.virial_radius[sample]
+    Mstellar = sim_info.halo_data.log10_stellar_mass[sample]
+    num_structure = np.zeros(len(sample))
+
+    num_haloes_all = len(sim_info.halo_data.log10_halo_mass)
+    haloes_position = np.zeros((num_haloes_all, 3))
+    haloes_position[:,0] = sim_info.halo_data.xminpot
+    haloes_position[:,1] = sim_info.halo_data.yminpot
+    haloes_position[:,2] = sim_info.halo_data.zminpot
+
+    for index in range(num_galaxies):
+
+        x = sim_info.halo_data.xminpot[sample[index]]
+        y = sim_info.halo_data.yminpot[sample[index]]
+        z = sim_info.halo_data.zminpot[sample[index]]
+
+        origin = np.array([x, y, z])
+
+        volume = unyt.unyt_array([size, size, size])
+        region = [[-0.5 * b + o, 0.5 * b + o] for b, o in zip(volume, origin)]
+        region_defined = unyt.unyt_array([region[0][0], region[0][1], region[1][0], region[1][1]])
+
+        haloes_new_position, _, new_origin = \
+            translate_coordinates(haloes_position, origin, volume, sim_info.boxSize, region_defined)
+
+        pos = haloes_new_position - new_origin
+        distance = np.sqrt(np.sum(pos ** 2, axis=1))
+        num_structure[index] = len(np.where(distance <= size)[0])
+
+
+    # Output data
+    filename = sim_info.output_path + "/galaxy_data_size_%.2fMpc.txt"%size
+
+    with open(filename, 'w') as f:
+        # Some header
+        line = '# Galaxy No. - Stellar Mass - Virial Mass - Virial Radius - Num. Substructure'
+        f.write(line)
+        f.write('\n')
+
+        for index in range(num_galaxies):
+            line = "%i"%index+"  %.2f"%Mstellar[index]+"  %.2f"%M200c[index]+"  %.2f"%R200c[index]+"  %i"%num_structure[index]
+            f.write(line)
+            f.write('\n')
 
 
 def plot_sample(sim_info, num_galaxies, npix, size, rotation):
@@ -307,10 +364,8 @@ def plot_sample(sim_info, num_galaxies, npix, size, rotation):
     # We are imposing to plot central galaxies only
     sample = np.where(sim_info.halo_data.structure_type == 10)[0]
 
-    # Do we need any data for Ben's parametric model?
-    # Halo mass? Halo radius? Galaxy mass? Size? Morphology? Angular momentum?
-    M200c = sim_info.halo_data.log10_halo_mass[sample]
-    R200c = sim_info.halo_data.virial_radius[sample]
+    # We output some information regarding the image we generate
+    make_output_data(sim_info, sample, size, num_galaxies)
 
     for index in range(num_galaxies):
 
@@ -339,8 +394,8 @@ if __name__ == "__main__":
 
     # Some options:
     npix = 1024         # number of pixels
-    size = 0.03         # [Mpc] size of image
-    num_galaxies = 5    # number of galaxies to plot
+    size = 1.0          # [Mpc] size of image
+    num_galaxies = 1    # number of galaxies to plot
     rotation = 50       # Rotation flag. 0: no rotation,
                         #                1: rotation to make stellar disc face-on,
                         #               -1: rotation to make stellar disc edge-on,

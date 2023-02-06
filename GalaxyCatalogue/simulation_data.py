@@ -44,6 +44,14 @@ class HaloCatalogue:
             catalogue.masses.mass_200crit.to("Msun").value[mask]
         )
 
+        self.log10_mvir = np.log10(
+            catalogue.masses.mass_tot.to("Msun").value[mask]
+        )
+
+        self.log10_stellar_mass = np.log10(
+            np.clip(catalogue.apertures.mass_star_50_kpc.to("Msun").value[mask], 1, 1e16)
+        )
+
         self.concentration = catalogue.concentration.cnfw.value[mask]
         self.virial_radius = catalogue.radii.r_200crit.to("Mpc").value[mask]
 

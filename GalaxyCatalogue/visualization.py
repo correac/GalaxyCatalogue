@@ -337,7 +337,7 @@ def make_output_data(sim_info, sample, size, num_galaxies):
         region_defined = unyt.unyt_array([region[0][0], region[0][1], region[1][0], region[1][1]])
 
         haloes_new_position, _, new_origin = \
-            translate_coordinates(haloes_position, origin, volume, sim_info.boxSize, region_defined)
+            translate_coordinates(haloes_position, origin, volume, sim_info.boxSize.value, region_defined)
 
         pos = haloes_new_position - new_origin
         distance = np.sqrt(np.sum(pos ** 2, axis=1))
@@ -394,9 +394,9 @@ if __name__ == "__main__":
 
     # Some options:
     npix = 1024         # number of pixels
-    size = 1.0          # [Mpc] size of image
-    num_galaxies = 1    # number of galaxies to plot
-    rotation = 50       # Rotation flag. 0: no rotation,
+    size = 5.0          # [Mpc] size of image
+    num_galaxies = 10   # number of galaxies to plot
+    rotation = 0        # Rotation flag. 0: no rotation,
                         #                1: rotation to make stellar disc face-on,
                         #               -1: rotation to make stellar disc edge-on,
                         #                2: random rotation,
